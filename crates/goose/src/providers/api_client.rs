@@ -124,10 +124,6 @@ impl ApiClient {
         self.request(path).response_post(payload).await
     }
 
-    pub async fn api_get(&self, path: &str) -> Result<ApiResponse> {
-        self.request(path).api_get().await
-    }
-
     pub async fn response_get(&self, path: &str) -> Result<Response> {
         self.request(path).response_get().await
     }

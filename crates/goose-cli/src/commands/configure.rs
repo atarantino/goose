@@ -309,10 +309,53 @@ pub async fn configure_provider_dialog() -> Result<bool, Box<dyn Error>> {
         .find(|p| &p.name == provider_name)
         .expect("Selected provider must exist in metadata");
 
+    // If provider supports both OAuth and API key, let user choose auth method
+    #[derive(PartialEq)]
+    enum AuthChoice {
+        OAuth,
+        ApiKey,
+        Both,
+    }
+    let has_oauth = provider_meta.config_keys.iter().any(|k| k.oauth_flow);
+    let has_api_key = provider_meta
+        .config_keys
+        .iter()
+        .any(|k| !k.oauth_flow && k.secret && k.required);
+    let mut auth_choice = AuthChoice::Both;
+    if has_oauth && has_api_key {
+        let label_oauth = if provider_meta.name == "anthropic" {
+            "Claude Pro/Max (OAuth)"
+        } else {
+            "OAuth"
+        };
+        let label_api = if provider_meta.name == "anthropic" {
+            "API Key (Anthropic API)"
+        } else {
+            "API Key"
+        };
+        let items = vec![("oauth", label_oauth, ""), ("api", label_api, "")];
+        let selection = cliclack::select("How would you like to authenticate?")
+            .items(&items)
+            .interact()?;
+        auth_choice = if selection == "oauth" {
+            AuthChoice::OAuth
+        } else {
+            AuthChoice::ApiKey
+        };
+    }
+
     // Configure required provider keys
     for key in &provider_meta.config_keys {
         if !key.required {
             continue;
+        }
+        // Respect chosen auth method when both are available
+        if has_oauth && has_api_key {
+            match auth_choice {
+                AuthChoice::OAuth if !key.oauth_flow => continue,
+                AuthChoice::ApiKey if key.oauth_flow => continue,
+                _ => {}
+            }
         }
 
         // First check if the value is set via environment variable
@@ -465,7 +508,11 @@ pub async fn configure_provider_dialog() -> Result<bool, Box<dyn Error>> {
     let messages =
         vec![Message::user().with_text("What is the weather like in San Francisco today?")];
     // Only add the sample tool if toolshim is not enabled
-    let tools = if !toolshim_enabled {
+    // Build tools for the test run. Avoid tools when using Anthropic OAuth to
+    // match Claude Code expectations and prevent auth restriction errors.
+    let tools = if provider_name == "anthropic" && has_oauth && matches!(auth_choice, AuthChoice::OAuth) {
+        vec![]
+    } else if !toolshim_enabled {
         let sample_tool = Tool::new(
             "get_weather".to_string(),
             "Get current temperature for a given location.".to_string(),
