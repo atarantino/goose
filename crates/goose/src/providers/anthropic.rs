@@ -120,22 +120,6 @@ async fn get_anthropic_oauth_access_token() -> anyhow::Result<String> {
 }
 
 impl AnthropicProvider {
-    /// Filter out the Extensions section from the system prompt (hardening for Claude Code OAuth)
-    fn filter_extensions_from_system_prompt(system: &str) -> String {
-        if let Some(extensions_start) = system.find("# Extensions") {
-            let after_extensions = &system[extensions_start..];
-            if let Some(next_section_pos) = after_extensions[1..].find("\n# ") {
-                let before_extensions = &system[..extensions_start];
-                let next_section_start = extensions_start + next_section_pos + 1;
-                let after_next_section = &system[next_section_start..];
-                format!("{}{}", before_extensions.trim_end(), after_next_section)
-            } else {
-                system[..extensions_start].trim_end().to_string()
-            }
-        } else {
-            system.to_string()
-        }
-    }
     pub fn from_env(model: ModelConfig) -> Result<Self> {
         let config = crate::config::Config::global();
         let host: String = config
@@ -343,7 +327,6 @@ impl Provider for AnthropicProvider {
             println!("Open this URL to authorize Anthropic OAuth:\n{}", url);
         }
         println!("Paste the authorization code here (including any #state if present): ");
-        use std::io::Read;
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).map_err(|e| ProviderError::ExecutionError(e.to_string()))?;
         let code = input.trim();
