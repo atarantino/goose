@@ -120,6 +120,22 @@ async fn get_anthropic_oauth_access_token() -> anyhow::Result<String> {
 }
 
 impl AnthropicProvider {
+    /// Filter out the Extensions section from the system prompt (hardening for Claude Code OAuth)
+    fn filter_extensions_from_system_prompt(system: &str) -> String {
+        if let Some(extensions_start) = system.find("# Extensions") {
+            let after_extensions = &system[extensions_start..];
+            if let Some(next_section_pos) = after_extensions[1..].find("\n# ") {
+                let before_extensions = &system[..extensions_start];
+                let next_section_start = extensions_start + next_section_pos + 1;
+                let after_next_section = &system[next_section_start..];
+                format!("{}{}", before_extensions.trim_end(), after_next_section)
+            } else {
+                system[..extensions_start].trim_end().to_string()
+            }
+        } else {
+            system.to_string()
+        }
+    }
     pub fn from_env(model: ModelConfig) -> Result<Self> {
         let config = crate::config::Config::global();
         let host: String = config
@@ -258,12 +274,9 @@ impl Provider for AnthropicProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<(Message, ProviderUsage), ProviderError> {
-        // Prepend Claude Code spoof line when using OAuth mode to comply with OAuth token constraints
+        // In OAuth mode, replace system prompt with a minimal Claude Code identity
         let system = if self.oauth_mode {
-            format!(
-                "You are Claude Code, Anthropic's official CLI for Claude.\n\n{}",
-                system
-            )
+            "You are Claude Code, Anthropic's official CLI for Claude.".to_string()
         } else {
             system.to_string()
         };
@@ -423,12 +436,9 @@ impl Provider for AnthropicProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
-        // Prepend Claude Code spoof line for OAuth mode
+        // In OAuth mode, replace system prompt with a minimal Claude Code identity
         let system = if self.oauth_mode {
-            format!(
-                "You are Claude Code, Anthropic's official CLI for Claude.\n\n{}",
-                system
-            )
+            "You are Claude Code, Anthropic's official CLI for Claude.".to_string()
         } else {
             system.to_string()
         };
