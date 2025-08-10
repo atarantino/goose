@@ -379,7 +379,12 @@ impl Provider for AnthropicProvider {
     }
 
     async fn fetch_supported_models(&self) -> Result<Option<Vec<String>>, ProviderError> {
-        let response = self.api_client.api_get("v1/models").await?;
+        // Ensure OAuth beta header is set for model listing as well
+        let mut request = self.api_client.request("v1/models");
+        for (key, value) in self.get_conditional_headers() {
+            request = request.header(key, value)?;
+        }
+        let response = request.api_get().await?;
 
         if response.status != StatusCode::OK {
             return Err(map_http_error_to_provider_error(
