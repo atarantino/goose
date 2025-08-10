@@ -120,6 +120,15 @@ async fn get_anthropic_oauth_access_token() -> anyhow::Result<String> {
 }
 
 impl AnthropicProvider {
+    /// Build the final system prompt for Anthropic.
+    /// In OAuth mode, use a minimal Claude Code identity to satisfy policy.
+    fn build_system(&self, original: &str) -> String {
+        if self.oauth_mode {
+            "You are Claude Code, Anthropic's official CLI for Claude.".to_string()
+        } else {
+            original.to_string()
+        }
+    }
     pub fn from_env(model: ModelConfig) -> Result<Self> {
         let config = crate::config::Config::global();
         let host: String = config
@@ -258,12 +267,7 @@ impl Provider for AnthropicProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<(Message, ProviderUsage), ProviderError> {
-        // In OAuth mode, replace system prompt with a minimal Claude Code identity
-        let system = if self.oauth_mode {
-            "You are Claude Code, Anthropic's official CLI for Claude.".to_string()
-        } else {
-            system.to_string()
-        };
+        let system = self.build_system(system);
         let payload = create_request(&self.model, &system, messages, tools)?;
 
         let response = self
@@ -419,12 +423,7 @@ impl Provider for AnthropicProvider {
         messages: &[Message],
         tools: &[Tool],
     ) -> Result<MessageStream, ProviderError> {
-        // In OAuth mode, replace system prompt with a minimal Claude Code identity
-        let system = if self.oauth_mode {
-            "You are Claude Code, Anthropic's official CLI for Claude.".to_string()
-        } else {
-            system.to_string()
-        };
+        let system = self.build_system(system);
         let mut payload = create_request(&self.model, &system, messages, tools)?;
         payload
             .as_object_mut()
