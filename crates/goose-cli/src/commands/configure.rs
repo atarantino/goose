@@ -508,7 +508,11 @@ pub async fn configure_provider_dialog() -> Result<bool, Box<dyn Error>> {
     let messages =
         vec![Message::user().with_text("What is the weather like in San Francisco today?")];
     // Only add the sample tool if toolshim is not enabled
-    let tools = if !toolshim_enabled {
+    // Build tools for the test run. Avoid tools when using Anthropic OAuth to
+    // match Claude Code expectations and prevent auth restriction errors.
+    let tools = if provider_name == "anthropic" && has_oauth && matches!(auth_choice, AuthChoice::OAuth) {
+        vec![]
+    } else if !toolshim_enabled {
         let sample_tool = Tool::new(
             "get_weather".to_string(),
             "Get current temperature for a given location.".to_string(),

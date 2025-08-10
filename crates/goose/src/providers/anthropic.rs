@@ -167,6 +167,8 @@ impl AnthropicProvider {
         // In OAuth mode, set required oauth beta header
         if self.oauth_mode {
             headers.push(("anthropic-beta", "oauth-2025-04-20"));
+            // Present a Claude-like user agent when using Claude Code OAuth tokens
+            headers.push(("User-Agent", "Claude/1.0 (goose)"));
         }
 
         headers
