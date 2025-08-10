@@ -309,10 +309,53 @@ pub async fn configure_provider_dialog() -> Result<bool, Box<dyn Error>> {
         .find(|p| &p.name == provider_name)
         .expect("Selected provider must exist in metadata");
 
+    // If provider supports both OAuth and API key, let user choose auth method
+    #[derive(PartialEq)]
+    enum AuthChoice {
+        OAuth,
+        ApiKey,
+        Both,
+    }
+    let has_oauth = provider_meta.config_keys.iter().any(|k| k.oauth_flow);
+    let has_api_key = provider_meta
+        .config_keys
+        .iter()
+        .any(|k| !k.oauth_flow && k.secret && k.required);
+    let mut auth_choice = AuthChoice::Both;
+    if has_oauth && has_api_key {
+        let label_oauth = if provider_meta.name == "anthropic" {
+            "Claude Pro/Max (OAuth)"
+        } else {
+            "OAuth"
+        };
+        let label_api = if provider_meta.name == "anthropic" {
+            "API Key (Anthropic API)"
+        } else {
+            "API Key"
+        };
+        let items = vec![("oauth", label_oauth, ""), ("api", label_api, "")];
+        let selection = cliclack::select("How would you like to authenticate?")
+            .items(&items)
+            .interact()?;
+        auth_choice = if selection == "oauth" {
+            AuthChoice::OAuth
+        } else {
+            AuthChoice::ApiKey
+        };
+    }
+
     // Configure required provider keys
     for key in &provider_meta.config_keys {
         if !key.required {
             continue;
+        }
+        // Respect chosen auth method when both are available
+        if has_oauth && has_api_key {
+            match auth_choice {
+                AuthChoice::OAuth if !key.oauth_flow => continue,
+                AuthChoice::ApiKey if key.oauth_flow => continue,
+                _ => {}
+            }
         }
 
         // First check if the value is set via environment variable
